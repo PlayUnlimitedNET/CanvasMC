@@ -1,0 +1,43 @@
+name: Canvas CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+permissions: write-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: default
+    steps:
+      - name: Checkout Git Repository
+        uses: actions/checkout@v6
+
+      - name: Set Up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Configure Git User Details
+        run: git config --global user.email "ci@canvasmc.com" && git config --global user.name "CanvasMC CI"
+
+      - name: Build All
+        run: ./gradlew --refresh-dependencies applyAllPatches && ./gradlew --refresh-dependencies createPaperclipJar
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.project_id_b }} CI Artifacts
+          path: canvas-server/build/libs/*-paperclip-*.jar
+
+      - name: Set Environment
+        if: github.event_name != 'pull_request'
+        run: sh scripts/SetENV.sh
