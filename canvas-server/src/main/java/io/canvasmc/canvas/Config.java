@@ -41,18 +41,12 @@ import org.jspecify.annotations.NonNull;
 @Configuration("canvas-server")
 public class Config {
     public static boolean ENABLE_FASTER_RANDOM = true;
-    public static final String DEFAULT_TPSBAR_FORMAT =
-        "<gradient:blue:aqua><b>TPS:</b></gradient> <tps>  <dark_gray>-</dark_gray>  " +
-            "<gradient:blue:aqua><b>MSPT:</b></gradient> <mspt>  <dark_gray>-</dark_gray>  " +
-            "<gradient:blue:aqua><b>Util:</b></gradient> <util>  <dark_gray>-</dark_gray>  " +
-            "<gradient:blue:aqua><b>Players:</b></gradient> <players>";
 
     public static final ComponentLogger LOGGER = ComponentLogger.logger("Canvas");
 
     // Note: this field should never be used during POST, use 'context.configuration()' instead
     public static Config INSTANCE;
 
-    public static ApiClient.BuildStatus ACTIVE_BUILD_CHANNEL = ApiClient.BuildStatus.UNKNOWN;
     public static final Consumer<String> GLOBAL_BROADCAST = (msg) -> {
         Component component = Util.gradient("[CanvasMC] ",
             s -> s.decorate(TextDecoration.BOLD),
@@ -81,29 +75,6 @@ public class Config {
         // preload parallel search radius iteration early
         //noinspection ResultOfMethodCallIgnored
         ParallelSearchRadiusIteration.getSearchIteration(MoonriseConstants.MAX_VIEW_DISTANCE);
-        CompletableFuture.supplyAsync(() -> {
-            ApiClient.BuildStatus buildStatus = ApiClient.BuildStatus.UNKNOWN;
-            ServerBuildInfo buildInfo = ServerBuildInfo.buildInfo();
-            int buildNum = buildInfo.buildNumber().orElse(-1);
-            if (buildNum == -1) {
-                buildStatus = ApiClient.BuildStatus.LOCAL;
-            }
-            else {
-                try {
-                    buildStatus = CanvasVersionFetcher.CLIENT.getBuild(buildNum).buildStatus();
-                } catch (Throwable ignored) {
-                }
-            }
-            return buildStatus;
-        }).thenAccept(buildStatus -> RegionizedServer.getInstance().addTask(() -> {
-            ACTIVE_BUILD_CHANNEL = buildStatus;
-            switch (buildStatus) {
-                case UNKNOWN -> GLOBAL_BROADCAST.accept("Running unknown build channel, proceed with caution");
-                case EXPERIMENTAL -> GLOBAL_BROADCAST.accept("Running a beta build, there may be bugs, proceed with caution!");
-                case LOCAL ->
-                    GLOBAL_BROADCAST.accept("You are running a development version of Canvas, which may not be production-ready, be very careful!");
-            }
-        }));
     }
 
     public static void reload() {
@@ -162,74 +133,6 @@ public class Config {
     }
 
     /* START CONFIGURATION */
-
-    public Chunks chunks = new Chunks();
-
-    public static class Chunks {
-
-        @RangeValidator.Range(from = 1, to = 10, inclusive = true)
-        @Comment("The thread priority for Canvas' rewritten chunk system executor")
-        public int threadPoolPriority = Thread.NORM_PRIORITY;
-
-        @Comment({
-            "Determines the fluid post processing mode.",
-            "The worldgen processes creates a lot of unnecessary fluid post-processing tasks,",
-            "which can overload the server thread and cause stutters.",
-            "There are 3 accepted values",
-            " - VANILLA - just normal vanilla, no changes",
-            " - DISABLED - disables fluid post processing completely",
-            " - FILTERED - applies a rough filter to filter out fluids that are definitely not going to flow"
-        })
-        public FluidPostProcessingMode fluidPostProcessingMode = FluidPostProcessingMode.VANILLA;
-
-        public enum FluidPostProcessingMode {
-            VANILLA, DISABLED, FILTERED
-        }
-
-        @Comment({
-            "Whether to turn fluid postprocessing into scheduled tick",
-            "Fluid post-processing is very expensive when loading in new chunks, and this can affect",
-            "MSPT significantly. This option delays fluid post-processing to scheduled tick to hopefully mitigate this issue."
-        })
-        public boolean fluidPostProcessingToScheduledTick = false;
-
-        @Comment("Whether to enable aquifer optimizations to accelerate overworld worldgen")
-        public boolean optimizeAquifer = false;
-
-        @Comment("Whether to enable End Biome Cache to accelerate The End worldgen")
-        public boolean useEndBiomeCache = false;
-
-        @PositiveNumericValueValidator.PositiveNumericValue
-        @Comment("The cache capacity for the end biome cache. Only works with 'useEndBiomeCache' enabled")
-        public int endBiomeCacheCapacity = 1024;
-
-        @Comment("Whether to enable Beardifier optimizations to accelerate world generation")
-        public boolean optimizeBeardifier = false;
-
-        @Comment("Whether to enable optimizations to the noise based chunk generator")
-        public boolean optimizeNoiseGeneration = false;
-
-        public Structures structures = new Structures();
-
-        public static class Structures {
-            @Comment({
-                "Whether to use an alternative strategy to make structure layouts generate slightly faster than",
-                "the default optimization the 'optimizeStructureGen' option has for template pool weights. This alternative strategy works by",
-                "changing the list of pieces that structures collect from the template pool to not have duplicate entries.",
-                "",
-                "This will not break the structure generation, but it will make the structure layout different than",
-                "if this config was off (breaking vanilla seed parity). The cost of speed may be worth it in large",
-                "servers where many structure or custom gen plugins are using very high weight values in their template pools.",
-                "",
-                "Pros: Get a bit more performance from high weight Template Pool Structures.",
-                "Cons: Loses parity with vanilla seeds on the layout of the structure. (Structure layout is not broken, just different)"
-            })
-            public boolean deduplicateShuffledTemplatePoolElementList = false;
-
-            @Comment("Enables a port of the mod StructureLayoutOptimizer, which optimizes generation of Jigsaw Structures and NBT pieces")
-            public boolean optimizeStructureGen = false;
-        }
-    }
 
     public Networking networking = new Networking();
 
@@ -360,118 +263,6 @@ public class Config {
         }
     }
 
-    // TODO - check these on minecraft updates
-    public Fixes fixes = new Fixes();
-
-    public static class Fixes {
-        @Comment({
-            "Fixes MC-298464 - https://bugs.mojang.com/browse/MC/issues/MC-298464",
-            "Memory leak in hoglin farm due to CHANGED_DIMENSION entity removal"
-        })
-        public boolean mc298464 = false;
-
-        @Comment({
-            "Fixes MC-223153 - https://bugs.mojang.com/browse/MC/issues/MC-223153",
-            "Block of Raw Copper uses stone sounds instead of copper sounds"
-        })
-        public boolean mc223153 = false;
-
-        @Comment({
-            "Fixes MC-200418 - https://bugs.mojang.com/browse/MC/issues/MC-200418",
-            "Cured baby zombie villagers stay as jockey variant"
-        })
-        public boolean mc200418 = false;
-
-        @Comment({
-            "Fixes MC-200418 - https://bugs.mojang.com/browse/MC/issues/MC-94054",
-            "Cave spiders spin around when walking"
-        })
-        public boolean mc94054 = false;
-
-        @Comment({
-            "Fixes MC-245394 - https://bugs.mojang.com/browse/MC/issues/MC-245394",
-            "The sounds of raid horns blaring aren't controlled by the correct sound slider"
-        })
-        public boolean mc245394 = false;
-
-        @Comment({
-            "Fixes MC-227337 - https://bugs.mojang.com/browse/MC/issues/MC-227337",
-            "When a shulker bullet hits an entity, the explodes sound is not played and particles are not produced"
-        })
-        public boolean mc227337 = false;
-
-        @Comment({
-            "Fixes MC-221257 - https://bugs.mojang.com/browse/MC/issues/MC-221257",
-            "Shulker bullets don't produce bubble particles when moving through water"
-        })
-        public boolean mc221257 = false;
-
-        @Comment({
-            "Fixes MC-206922 - https://bugs.mojang.com/browse/MC/issues/MC-206922",
-            "Items dropped by entities that are killed by lightning instantly disappear"
-        })
-        public boolean mc206922 = false;
-
-        @Comment({
-            "Fixes MC-155509 - https://bugs.mojang.com/browse/MC/issues/MC-155509",
-            "Puffed pufferfish can hurt the player while dying"
-        })
-        public boolean mc155509 = false;
-
-        @Comment({
-            "Fixes MC-132878 - https://bugs.mojang.com/browse/MC/issues/MC-132878",
-            "Armor stands destroyed by explosions/lava/fire don't produce particles"
-        })
-        public boolean mc132878 = false;
-
-        @Comment({
-            "Fixes MC-121706 - https://bugs.mojang.com/browse/MC/issues/MC-121706",
-            "Skeletons and illusioners aren't looking up / down at their target while strafing"
-        })
-        public boolean mc121706 = false;
-
-        @Comment({
-            "Fixes MC-119754 - https://bugs.mojang.com/browse/MC/issues/MC-119754",
-            "Firework boosting on elytra continues in spectator mode"
-        })
-        public boolean mc119754 = false;
-
-        @Comment({
-            "Fixes MC-100991 - https://bugs.mojang.com/browse/MC/issues/MC-100991",
-            "Killing entities with a fishing rod doesn't count as a kill"
-        })
-        public boolean mc100991 = false;
-
-        @Comment({
-            "Fixes MC-30391 - https://bugs.mojang.com/browse/MC/issues/MC-30391",
-            "Chickens, blazes and the wither emit particles when landing from a height, despite falling slowly"
-        })
-        public boolean mc30391 = false;
-
-        @Comment({
-            "Fixes MC-183990 - https://bugs.mojang.com/browse/MC/issues/MC-183990",
-            "Group AI of some mobs breaks when their target dies"
-        })
-        public boolean mc183990 = false;
-
-        @Comment({
-            "Fixes MC-136249 - https://bugs.mojang.com/browse/MC/issues/MC-136249",
-            "Wearing boots enchanted with depth strider decreases the strength of the riptide enchantment"
-        })
-        public boolean mc136249 = false;
-
-        @Comment({
-            "In Vanilla, pearls can be duplicated during shutdown because pearls are saved to its owning player data",
-            "and in the chunk data. Meaning, when the chunk is loaded, it loads that pearl, and when the player is loaded",
-            "it loads the pearl in the player data.",
-            "",
-            "This fixes that, so that when 'restoreVanillaEnderPearlBehavior' is enabled, it unloads the pearl during shutdown",
-            "so that the duplication doesn't occur. With that configuration disabled, it just loads the pearl from the",
-            "chunk like normal."
-        })
-        public boolean pearlDuplication = false;
-    }
-
     @Comment({
         "Enables better XP orb merging and removes the XP pickup delay",
         "Can be very useful for heavy XP farms",
@@ -483,19 +274,6 @@ public class Config {
         "will be no \"ghost orbs\", and all xp merging is as efficient as possible"
     })
     public boolean fastOrbs = false;
-
-    @Comment({
-        "Enables a regionized TPS-Bar implementation for Canvas",
-        "This function is per-player, with this as a global setting to disable it",
-        "To enable the tps-bar per-player, use the '/tpsbar' command"
-    })
-    public boolean enableTpsBar = true;
-
-    @Comment({
-        "MiniMessage-formatted line for the TPS bar. Placeholders: <tps>, <mspt>, <util>, <players>.",
-        "Legacy tokens %tps%, %mspt%, %util%, %players% are also accepted and auto-converted."
-    })
-    public String tpsBarFormat = DEFAULT_TPSBAR_FORMAT;
 
     @Comment(value = {
         "The default respawn dimension for the server.",

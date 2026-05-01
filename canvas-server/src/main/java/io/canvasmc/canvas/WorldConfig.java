@@ -6,6 +6,7 @@ import io.canvasmc.canvas.configuration.Resolver;
 import io.canvasmc.canvas.configuration.Style;
 import io.canvasmc.canvas.configuration.Validator;
 import java.nio.file.Path;
+import io.papermc.paper.threadedregions.TickRegions;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -15,6 +16,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class WorldConfig extends Part {
+
+    // all constants for configurations go here
+
+    public static final String DEFAULT_TPSBAR_FORMAT =
+        "<gradient:blue:aqua><b>TPS:</b></gradient> <tps>  <dark_gray>-</dark_gray>  " +
+            "<gradient:blue:aqua><b>MSPT:</b></gradient> <mspt>  <dark_gray>-</dark_gray>  " +
+            "<gradient:blue:aqua><b>Util:</b></gradient> <util>  <dark_gray>-</dark_gray>  " +
+            "<gradient:blue:aqua><b>Players:</b></gradient> <players>";
 
     // note that Canvas core utilities and loggers and such should go in the global configuration class, as this one
     // doesn't entirely seem that appropriate for that sort of stuff
@@ -28,7 +37,15 @@ public class WorldConfig extends Part {
 
     // for the default configuration, we do need a solid configuration for this or else the patchable
     // variant will fail to load, so we load this in the static block
+
     static {
+        //noinspection ResultOfMethodCallIgnored
+        GlobalConfiguration.getInstance(); // preload global
+
+        reload();
+    }
+
+    public static void reload() {
         ConfigurationProvider.buildSolidConfiguration(
             BASE_FILE,
             WorldConfig::new,
@@ -51,7 +68,7 @@ public class WorldConfig extends Part {
                     Validator.validateObject(instance);
 
                     // note that we do not do anything else on post load for the default
-                    // configuration file, only patchable instances
+                    // configuration file, only patchable instances need post load
 
                 }
             },
@@ -82,6 +99,17 @@ public class WorldConfig extends Part {
                 .literal("https://canvasmc.io/discord")
                 .compile(60)
         );
+
+        // on reload, if the server started, we need to swap out the configs
+        if (TickRegions.started) {
+            for (final ServerLevel world : MinecraftServer.getServer().getAllLevels()) {
+
+                // this will swap the config with the new patchable variant
+                // it mimics the startup process of the patchable configs
+
+                world.reloadCanvasConfig();
+            }
+        }
     }
 
     private final ServerLevel world;
@@ -104,7 +132,6 @@ public class WorldConfig extends Part {
                 .resolve("canvas-patch.yml"),
             BASE_FILE,
             () -> new WorldConfig(world),
-            GlobalConfiguration.CHAR_LIM,
             new Resolver<>() {
                 @Override
                 public void onFinishLoad(final WorldConfig instance) {
@@ -145,5 +172,26 @@ public class WorldConfig extends Part {
     }
 
     private void onLoad() {
+
+        // validate the object here too, because some users may do
+        // something stupid in the patch variant
+
+        Validator.validateObject(this);
     }
+
+    {
+        option("enableTpsBar")
+            .docs(
+                "Enables a regionized TPS-Bar implementation for Canvas.",
+                "To enable the tps-bar, use the \"/tpsbar\" command"
+            );
+        option("tpsBarFormat")
+            .docs(
+                "MiniMessage-formatted line for the TPS bar. Placeholders are <tps>, <mspt>, <util>, and <players>.",
+                "Legacy tokens(%tps%, %mspt%, %util%, %players%) are also accepted and auto-converted."
+            ).greedyString();
+    }
+
+    public boolean enableTpsBar = true;
+    public String tpsBarFormat = DEFAULT_TPSBAR_FORMAT;
 }

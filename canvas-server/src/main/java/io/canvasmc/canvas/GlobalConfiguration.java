@@ -41,6 +41,11 @@ public class GlobalConfiguration extends Part {
     private static ApiClient.BuildStatus BUILD_STATUS;
 
     static {
+        reload();
+    }
+
+    public static void reload() {
+        LOGGER.info("Loading Canvas server configuration");
         ConfigurationProvider.buildSolidConfiguration(
             CONFIG_PATH,
             GlobalConfiguration::new,
@@ -48,16 +53,17 @@ public class GlobalConfiguration extends Part {
             new Resolver<>() {
                 @Override
                 public void onDiffAdd(final String fullyQualifiedName) {
-                    LOGGER.info("Added new server-wide configuration option, '{}'", fullyQualifiedName);
+                    LOGGER.info("Added new server-wide configuration option: \"{}\"", fullyQualifiedName);
                 }
 
                 @Override
                 public void onDiffRemove(final String fullyQualifiedName) {
-                    LOGGER.warn("Server-wide configuration option '{}' no longer exists and is now removed.", fullyQualifiedName);
+                    LOGGER.warn("Server-wide configuration option \"{}\" no longer exists and is now removed.", fullyQualifiedName);
                 }
 
                 @Override
                 public void onFinishLoad(final GlobalConfiguration instance) {
+
                     postLoad(instance);
 
                     CompletableFuture.supplyAsync(() -> {
@@ -275,4 +281,119 @@ public class GlobalConfiguration extends Part {
         public long overloadedLogMillis = 5_000L;
         public float defaultTickRate = 20.0F;
     }
+
+    public ChunkSystem chunkSystem = new ChunkSystem();
+    public static class ChunkSystem extends Part {
+
+        {
+            option("threadPriority").between(Thread.MIN_PRIORITY, Thread.MAX_PRIORITY);
+            option("fluidPostProcessingAlgorithm")
+                .docs(
+                    Style.wrap(
+                        "The worldgen processes creates a lot of unnecessary fluid post-processing tasks,",
+                        "which can overload the server and cause stuttering when generating new chunks.",
+                        "Depending on the algorithm chosen, this can help reduce stutter and improve performance",
+                        "when generating chunks"
+                    ).defineEnum(FluidPostProcessingMode.class, (mode) -> {
+                         return switch (mode) {
+                             case VANILLA -> "Normal post processing algorithm, everything is processed";
+                             case DISABLED -> "Disables fluid post processing entirely";
+                             case FILTERED -> "C2MEs algorithm to filter unnecessary post processing tasks";
+                         };
+                    })
+                );
+
+            option("makeFluidPostProcessScheduledTick")
+                .docs(
+                    "Enabling this turns fluid post processing into a scheduled tick, which hopefully",
+                    "helps to mitigate MSPT spiking issues during chunk generation"
+                );
+            option("endBiomeCacheSize").greaterThan(0);
+            option("structureOptimizations").docs(
+                "These options are ported from the mod StructureLayoutOptimizer, https://modrinth.com/mod/structure-layout-optimizer",
+                "which optimizes the generation of Jigsaw Structures and NBT pieces"
+            );
+        }
+
+        public int threadPriority = Thread.NORM_PRIORITY;
+        public FluidPostProcessingMode fluidPostProcessingAlgorithm = FluidPostProcessingMode.VANILLA;
+
+        public enum FluidPostProcessingMode {
+            VANILLA,
+            DISABLED,
+            FILTERED;
+        }
+
+        public boolean makeFluidPostProcessScheduledTick = false;
+        public boolean optimizeAquifer = false;
+        public boolean useEndBiomeCache = false;
+        public int endBiomeCacheSize = 1024;
+        public boolean optimizeBeardifier = false;
+        public boolean optimizeNoiseGeneration = false;
+
+        public StructureGen structureOptimizations = new StructureGen();
+        public static class StructureGen extends Part {
+
+            {
+                option("deduplicateShuffledTemplatePoolElementList").docs(
+                    Style.wrap(
+                        "Whether to use an alternative strategy to make structure layouts generate slightly faster than",
+                        "the default optimization has for template pool weights. This alternative strategy works by",
+                        "changing the list of pieces that structures collect from the template pool to not have duplicate entries."
+                    )
+                    .blank()
+                    .wordWrap(
+                        "By enabling this option you can get a bit more performance from high weight Template Pool Structures,",
+                        "but you lose parity with Vanilla seeds on the layout of the structure"
+                    )
+                );
+            }
+
+            public boolean deduplicateShuffledTemplatePoolElementList = false;
+            public boolean enable = false;
+        }
+    }
+
+    // TODO - check these on minecraft updates
+    public UpstreamFixes vanillaFixes = new UpstreamFixes();
+    public static class UpstreamFixes extends Part {
+
+        {
+            // should we do these specific or do we try and do better with this?
+            // stream((fieldName) -> {
+            //     if (fieldName.startsWith("mc")) {
+            //         // this is a specific minecraft fix
+            //         return new OptionDefinition()
+            //             .docs(
+            //                 Style.create().literal("https://bugs.mojang.com/browse/MC/issues/MC-" + fieldName.substring(2))
+            //             );
+            //     }
+            //     return null;
+            // });
+            option("pearlDuplication")
+                .docs(
+                    "There is a Vanilla bug where in-flight pearls are duplicated at shutdown. This fixes that when",
+                    "the option \"restoreVanillaEnderPearlBehavior\" is enabled alongside this."
+                );
+        }
+
+        public boolean mc298464 = false;
+        public boolean mc223153 = false;
+        public boolean mc200418 = false;
+        public boolean mc94054 = false;
+        public boolean mc245394 = false;
+        public boolean mc227337 = false;
+        public boolean mc221257 = false;
+        public boolean mc206922 = false;
+        public boolean mc155509 = false;
+        public boolean mc132878 = false;
+        public boolean mc121706 = false;
+        public boolean mc119754 = false;
+        public boolean mc100991 = false;
+        public boolean mc30391 = false;
+        public boolean mc183990 = false;
+        public boolean mc136249 = false;
+        public boolean pearlDuplication = false;
+    }
+
 }

@@ -2,7 +2,6 @@ package io.canvasmc.canvas.command.sub;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import io.canvasmc.canvas.Config;
 import io.canvasmc.canvas.command.Command;
 import io.canvasmc.canvas.world.RegionizedTpsBar;
 import java.util.Collection;
@@ -53,13 +52,6 @@ public class TpsBarCommand implements Command {
 
     @Override
     public LiteralArgumentBuilder<CommandSourceStack> construct(LiteralArgumentBuilder<CommandSourceStack> base) {
-        if (!Config.INSTANCE.enableTpsBar) {
-            return base.executes(ctx -> {
-                ctx.getSource().sendFailure(Component.literal("TPS bar is disabled in the config."));
-                return 0;
-            });
-        }
-
         return base
             .executes(ctx -> {
                 CommandSourceStack source = ctx.getSource();
@@ -84,7 +76,7 @@ public class TpsBarCommand implements Command {
                 })
 
                 .then(argument("placement", StringArgumentType.word())
-                    .suggests((context, builder) -> {
+                    .suggests((_, builder) -> {
                         builder.suggest("action_bar");
                         builder.suggest("boss_bar");
                         return builder.buildFuture();
